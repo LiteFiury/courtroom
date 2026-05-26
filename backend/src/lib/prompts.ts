@@ -65,5 +65,3 @@ You are the WITNESS. You are on the stand under oath.
 - Stay consistent with facts already established in the transcript.`;
   }
 }
-
-
