@@ -1,12 +1,12 @@
 "use client";
-import { use, useEffect } from "react";
+import { useEffect } from "react";
 import { useSocket } from "@/hooks/useSocket";
 import { useTrial, useStartTrialWithSocket } from "@/hooks/useTrials";
 import { useCourtroomStore } from "@/store/courtroomStore";
 import CourtroomLayout from "@/components/courtroom/CourtroomLayout";
 
-export default function TrialPage({ params }: { params: Promise<{ trialId: string }> }) {
-  const { trialId } = use(params);
+export default function TrialPage({ params }: { params: { trialId: string } }) {
+  const { trialId } = params;
   const { data: trial, isLoading } = useTrial(trialId);
   const { mutate: startTrial } = useStartTrialWithSocket();
   const setTrialId = useCourtroomStore((s) => s.setTrialId);
