@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Trial {
+  id               String    @id @default(uuid())
+  title            String
+  caseDescription  String?
+  status           String    @default("idle")
+  config           Json
+  createdAt        DateTime  @default(now())
+  concludedAt      DateTime?
+
+  transcript       TranscriptEntry[]
+  evidence         Evidence[]
+  objections       Objection[]
+  verdict          Verdict?
+}
+
+model TranscriptEntry {
+  id            String   @id @default(uuid())
+  trialId       String
+  participantId String
+  role          String
+  phase         String
+  content       String
+  stricken      Boolean  @default(false)
+  tokenCount    Int      @default(0)
+  sequence      Int
+  createdAt     DateTime @default(now())
+
+  trial         Trial    @relation(fields: [trialId], references: [id])
+}
+
+model Evidence {
+  id            String  @id @default(uuid())
+  trialId       String
+  submittedBy   String
+  title         String
+  content       String
+  fileUrl       String?
+  status        String  @default("pending")
+  rulingReason  String?
+  createdAt     DateTime @default(now())
+
+  trial         Trial   @relation(fields: [trialId], references: [id])
+}
+
+model Objection {
+  id             String   @id @default(uuid())
+  trialId        String
+  raisedBy       String
+  grounds        String
+  ruling         String?
+  targetEntryId  String?
+  sequence       Int
+  createdAt      DateTime @default(now())
+
+  trial          Trial    @relation(fields: [trialId], references: [id])
+}
+
+model Verdict {
+  id              String   @id @default(uuid())
+  trialId         String   @unique
+  outcome         String
+  reasoning       String
+  evidenceWeights Json?
+  createdAt       DateTime @default(now())
+
+  trial           Trial    @relation(fields: [trialId], references: [id])
+}
