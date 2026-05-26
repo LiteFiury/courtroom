@@ -10,27 +10,27 @@ const config: Config = {
     extend: {
       colors: {
         court: {
-          bg:               "#040201",
-          surface:          "#0A0603",
-          panel:            "#100804",
-          border:           "#1E1208",
-          parchment:        "#EDE0C4",
-          parchmentDim:     "#8C7A5C",
-          parchmentMuted:   "#4A3E2C",
-          gold:             "#B8922E",
-          goldBright:       "#D4AA50",
-          prosecutionBg:    "#060D1A",
-          prosecutionBdr:   "#0F1E36",
-          prosecutionAcc:   "#2A4E8A",
-          defenseBg:        "#130505",
-          defenseBdr:       "#2A0C0C",
-          defenseAcc:       "#8A2A2A",
-          judgeBg:          "#040A05",
-          judgeBdr:         "#0A1C0C",
-          judgeAcc:         "#2A6B32",
-          witnessBg:        "#080A10",
-          witnessBdr:       "#141820",
-          witnessAcc:       "#4A5680",
+          bg:               "#1E2236",       // deep navy background
+          surface:          "#252B42",       // slightly lighter navy surface
+          panel:            "#2C3350",       // panel navy
+          border:           "#3A4260",       // navy border
+          parchment:        "#F0F0DB",       // cream text (lightest)
+          parchmentDim:     "#E1D9BC",       // warm beige text
+          parchmentMuted:   "#ACBAC4",       // slate-blue muted text
+          gold:             "#ACBAC4",       // slate used as accent
+          goldBright:       "#F0F0DB",       // cream as bright accent
+          prosecutionBg:    "#232A40",
+          prosecutionBdr:   "#30364F",
+          prosecutionAcc:   "#ACBAC4",       // slate-blue for prosecution
+          defenseBg:        "#282035",
+          defenseBdr:       "#3A3050",
+          defenseAcc:       "#E1D9BC",       // beige for defence
+          judgeBg:          "#1E2438",
+          judgeBdr:         "#30364F",
+          judgeAcc:         "#F0F0DB",       // cream for judge
+          witnessBg:        "#252B42",
+          witnessBdr:       "#3A4260",
+          witnessAcc:       "#ACBAC4",       // slate for witness
         },
       },
       fontFamily: {
