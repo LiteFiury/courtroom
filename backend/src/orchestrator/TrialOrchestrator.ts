@@ -48,7 +48,7 @@ export class TrialOrchestrator {
   // ── helpers ──────────────────────────────────────────────────────────────
 
   private emit(event: Omit<CourtroomEvent, "trialId" | "timestamp">) {
-    const full: CourtroomEvent = { ...event, trialId: this.trialId, timestamp: new Date().toISOString() };
+    const full = { ...event, trialId: this.trialId, timestamp: new Date().toISOString() } as CourtroomEvent;
     this.io.to(this.trialId).emit("courtroom_event", full);
   }
 
