@@ -66,4 +66,4 @@ You are the WITNESS. You are on the stand under oath.
   }
 }
 
-export type CourtPhase = string;
+
