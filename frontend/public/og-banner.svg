@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#040201"/>
+      <stop offset="100%" stop-color="#0A0603"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#B8922E"/>
+      <stop offset="100%" stop-color="#D4AA50"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Border frame -->
+  <rect x="24" y="24" width="1152" height="582" rx="4" fill="none" stroke="#1E1208" stroke-width="1"/>
+  <rect x="36" y="36" width="1128" height="558" rx="3" fill="none" stroke="#B8922E" stroke-width="0.5" opacity="0.3"/>
+
+  <!-- Gold accent bar top -->
+  <rect x="0" y="0" width="1200" height="4" fill="url(#gold)" opacity="0.6"/>
+
+  <!-- Title -->
+  <text x="600" y="255" font-family="Georgia, serif" font-size="72" font-weight="700"
+        fill="#EDE0C4" text-anchor="middle" letter-spacing="8">CourtRoom AI</text>
+
+  <!-- Divider -->
+  <rect x="460" y="282" width="280" height="1" fill="#B8922E" opacity="0.5"/>
+
+  <!-- Subtitle -->
+  <text x="600" y="330" font-family="Georgia, serif" font-size="22" fill="#8C7A5C"
+        text-anchor="middle" letter-spacing="4">MULTI-AGENT TRIAL SIMULATOR</text>
+
+  <!-- Agent labels -->
+  <text x="230" y="430" font-family="Georgia, serif" font-size="16" fill="#2A4E8A" text-anchor="middle" letter-spacing="3">PROSECUTION</text>
+  <text x="600" y="430" font-family="Georgia, serif" font-size="16" fill="#2A6B32" text-anchor="middle" letter-spacing="3">JUDGE</text>
+  <text x="970" y="430" font-family="Georgia, serif" font-size="16" fill="#8A2A2A" text-anchor="middle" letter-spacing="3">DEFENCE</text>
+
+  <!-- Dots -->
+  <circle cx="230" cy="455" r="3" fill="#2A4E8A" opacity="0.8"/>
+  <circle cx="600" cy="455" r="3" fill="#2A6B32" opacity="0.8"/>
+  <circle cx="970" cy="455" r="3" fill="#8A2A2A" opacity="0.8"/>
+
+  <!-- Bottom caption -->
+  <text x="600" y="540" font-family="Georgia, serif" font-size="14" fill="#4A3E2C"
+        text-anchor="middle" letter-spacing="2">Streaming arguments · Live objections · Autonomous verdicts</text>
+
+  <!-- Gold accent bar bottom -->
+  <rect x="0" y="626" width="1200" height="4" fill="url(#gold)" opacity="0.4"/>
+</svg>
