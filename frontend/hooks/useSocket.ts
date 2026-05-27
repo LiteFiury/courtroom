@@ -7,25 +7,31 @@ import type { CourtroomEvent } from "@/types/events.types";
 import type { TranscriptEntry } from "@/types/trial.types";
 
 export function useSocket(trialId: string) {
-  const mounted = useRef(false);
+  // Use trialId as key so re-mounting with same trialId re-registers correctly
+  const registeredTrialId = useRef<string | null>(null);
   const courtroom = useCourtroomStore();
   const transcript = useTranscriptStore();
   const ui = useUIStore();
 
   useEffect(() => {
-    if (mounted.current) return;
-    mounted.current = true;
+    if (!trialId) return;
+
+    // Always reconnect fresh on mount (handles page refresh)
+    disconnectSocket();
+    registeredTrialId.current = trialId;
 
     const socket = connectSocket();
 
-    socket.on("connect", () => {
+    const onConnect = () => {
       courtroom.setConnected(true);
       socket.emit("join_trial", { trialId });
-    });
+    };
 
-    socket.on("disconnect", () => courtroom.setConnected(false));
+    const onDisconnect = () => {
+      courtroom.setConnected(false);
+    };
 
-    socket.on("courtroom_event", (event: CourtroomEvent) => {
+    const onEvent = (event: CourtroomEvent) => {
       switch (event.type) {
         case "PHASE_CHANGE":
           courtroom.setPhase(event.phase);
@@ -129,13 +135,27 @@ export function useSocket(trialId: string) {
         case "PROCEDURAL_NOTICE":
           ui.addNotice(event.message, event.severity);
           break;
+
+        case "TRIAL_CONCLUDED":
+          courtroom.setPhase("CONCLUDED");
+          break;
       }
-    });
+    };
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("courtroom_event", onEvent);
+
+    // If already connected (e.g. hot reload), join immediately
+    if (socket.connected) {
+      courtroom.setConnected(true);
+      socket.emit("join_trial", { trialId });
+    }
 
     return () => {
-      socket.off("connect");
-      socket.off("disconnect");
-      socket.off("courtroom_event");
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("courtroom_event", onEvent);
       socket.emit("leave_trial", { trialId });
       disconnectSocket();
       courtroom.reset();
