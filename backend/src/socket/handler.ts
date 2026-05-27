@@ -20,19 +20,42 @@ export function registerSocketHandlers(io: IOServer) {
     });
 
     socket.on("start_trial", async ({ trialId }: { trialId: string }) => {
-      if (active.has(trialId)) return;
+      // If already running, do nothing
+      if (active.has(trialId)) {
+        console.log(`[socket] Trial ${trialId} already active, ignoring start`);
+        return;
+      }
 
       try {
         const trial = await prisma.trial.findUnique({ where: { id: trialId } });
-        if (!trial || trial.status !== "idle") return;
+
+        // Allow starting if idle OR if it was stuck in "active" from a crashed session
+        if (!trial) {
+          console.error(`[socket] Trial ${trialId} not found`);
+          return;
+        }
+
+        if (trial.status === "concluded") {
+          console.log(`[socket] Trial ${trialId} already concluded`);
+          return;
+        }
+
+        // Reset to idle if stuck in active state without a running orchestrator
+        if (trial.status === "active") {
+          await prisma.trial.update({ where: { id: trialId }, data: { status: "idle" } });
+        }
 
         const config = trial.config as unknown as TrialConfig;
         const orchestrator = new TrialOrchestrator(io, trialId, config);
         active.set(trialId, orchestrator);
 
-        orchestrator.run().finally(() => active.delete(trialId));
+        orchestrator.run().finally(() => {
+          active.delete(trialId);
+          console.log(`[socket] Trial ${trialId} finished, removed from active map`);
+        });
       } catch (e) {
         console.error("[socket] start_trial error:", e);
+        active.delete(trialId);
         io.to(trialId).emit("courtroom_event", {
           type: "ERROR", trialId, timestamp: new Date().toISOString(), message: String(e),
         });
