@@ -29,6 +29,10 @@ interface BaseEvent {
   timestamp: string;
 }
 
+export interface TrialConcludedEvent extends BaseEvent {
+  type: "TRIAL_CONCLUDED";
+}
+
 export interface PhaseChangeEvent extends BaseEvent {
   type: "PHASE_CHANGE";
   phase: CourtPhase;
@@ -101,6 +105,7 @@ export interface ProceduralNoticeEvent extends BaseEvent {
 }
 
 export type CourtroomEvent =
+  | TrialConcludedEvent
   | PhaseChangeEvent
   | SpeakerChangeEvent
   | StreamStartEvent
