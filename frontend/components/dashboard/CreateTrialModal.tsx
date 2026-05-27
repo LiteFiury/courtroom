@@ -14,12 +14,12 @@ const ROLES: { role: AgentRole; label: string }[] = [
   { role: "witness",    label: "Witness" },
 ];
 
-// Updated to currently active models (May 2026)
+// Active models as of May 2026
 const DEFAULT_MODELS: Record<AIProvider, string> = {
   groq:        "llama-3.3-70b-versatile",
   cerebras:    "llama-3.3-70b",
   gemini:      "gemini-2.5-flash",
-  openrouter:  "mistralai/mistral-small-3.1-24b-instruct:free",
+  openrouter:  "deepseek/deepseek-r1:free",
   anthropic:   "claude-3-5-haiku-20241022",
   ollama:      "llama3",
 };
@@ -34,10 +34,10 @@ export default function CreateTrialModal({ open, onClose }: { open: boolean; onC
   const [assignments, setAssignments] = useState<
     Record<AgentRole, { provider: AIProvider; model: string }>
   >({
-    judge:      { provider: "groq",       model: DEFAULT_MODELS.groq },
-    advocate_a: { provider: "groq",       model: "llama3-70b-8192" },
-    advocate_b: { provider: "gemini",     model: DEFAULT_MODELS.gemini },
-    witness:    { provider: "openrouter", model: DEFAULT_MODELS.openrouter },
+    judge:      { provider: "groq",       model: "llama-3.3-70b-versatile" },
+    advocate_a: { provider: "groq",       model: "llama-3.1-8b-instant" },
+    advocate_b: { provider: "gemini",     model: "gemini-2.5-flash" },
+    witness:    { provider: "openrouter", model: "deepseek/deepseek-r1:free" },
   });
 
   const setAssignment = (role: AgentRole, provider: AIProvider) =>
