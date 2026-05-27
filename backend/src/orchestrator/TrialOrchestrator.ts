@@ -1,7 +1,7 @@
 import { v4 as uuid } from "uuid";
-import { Server as IOServer, Socket } from "socket.io";
+import { Server as IOServer } from "socket.io";
 import { prisma } from "../lib/db";
-import { redis, TRIAL_STATE_KEY, TRIAL_PHASE_KEY } from "../lib/redis";
+import { redis, TRIAL_PHASE_KEY } from "../lib/redis";
 import { getProvider } from "../lib/ai";
 import { buildSystemPrompt } from "../lib/prompts";
 import type { CourtPhase, AgentRole, TrialConfig, CourtroomEvent } from "../lib/types";
@@ -36,7 +36,7 @@ export class TrialOrchestrator {
   private io: IOServer;
   private trialId: string;
   private config: TrialConfig;
-  private currentPhase: CourtPhase = "IDLE";
+  private currentPhase: CourtPhase = "INITIALIZED";
   private running = false;
 
   constructor(io: IOServer, trialId: string, config: TrialConfig) {
@@ -92,7 +92,7 @@ export class TrialOrchestrator {
     trial: { title: string; caseDescription: string | null },
   ): Promise<string> {
     const assignment = this.getAssignment(role);
-    const provider = getProvider(assignment.provider as "groq" | "anthropic" | "openrouter" | "ollama");
+    const provider = getProvider(assignment.provider as "groq" | "anthropic" | "openrouter" | "ollama" | "cerebras" | "gemini");
 
     const recentTranscript = await this.getRecentTranscript();
     const evidenceSummary  = await this.getEvidenceSummary();
@@ -110,7 +110,6 @@ export class TrialOrchestrator {
 
     let fullText = "";
     let tokenCount = 0;
-    let objectionDetected = false;
 
     const full = await provider.streamCompletion({
       model:       assignment.model,
@@ -122,12 +121,6 @@ export class TrialOrchestrator {
         fullText += token;
         tokenCount++;
         this.emit({ type: "TOKEN", agentId: role, role, token, entryId });
-
-        // detect objection mid-stream from the OTHER advocate
-        if (!objectionDetected && fullText.length > 40) {
-          const grounds = this.detectObjection(fullText);
-          if (grounds && role !== "judge") objectionDetected = true; // handled post-stream
-        }
       },
     });
 
@@ -166,16 +159,14 @@ export class TrialOrchestrator {
       },
     });
 
-    // Judge rules
     const judgeAssignment = this.getAssignment("judge");
     const judgeProvider   = getProvider(judgeAssignment.provider as never);
     const rulingText = await judgeProvider.streamCompletion({
-      model:       judgeAssignment.model,
-      systemPrompt: `You are the presiding judge. Rule on this objection in one sentence: "${grounds}". 
-Reply ONLY: "Objection sustained." or "Objection overruled." followed by one sentence reason.`,
-      messages:    [{ role: "user", content: "Rule now." }],
-      temperature: 0.3,
-      maxTokens:   80,
+      model:        judgeAssignment.model,
+      systemPrompt: `You are the presiding judge. Rule on this objection in one sentence: "${grounds}". \nReply ONLY: "Objection sustained." or "Objection overruled." followed by one sentence reason.`,
+      messages:     [{ role: "user", content: "Rule now." }],
+      temperature:  0.3,
+      maxTokens:    80,
       onToken: (t) => this.emit({ type: "TOKEN", agentId: "judge", role: "judge", token: t, entryId: objectionId + "_ruling" }),
     });
 
@@ -207,9 +198,7 @@ Reply ONLY: "Objection sustained." or "Objection overruled." followed by one sen
 
     const verdictText = await judgeProvider.streamCompletion({
       model: judgeAssignment.model,
-      systemPrompt: `You are the judge. Based on the full trial transcript and evidence, deliver a verdict JSON:
-{"outcome":"[Guilty|Not Guilty|Dismissed]","reasoning":"[2–3 sentence reasoning]"}
-Respond ONLY with valid JSON.`,
+      systemPrompt: `You are the judge. Based on the full trial transcript and evidence, deliver a verdict JSON:\n{"outcome":"[Guilty|Not Guilty|Dismissed]","reasoning":"[2–3 sentence reasoning]"}\nRespond ONLY with valid JSON.`,
       messages: [{ role: "user", content: `Transcript:\n${transcript}\n\nEvidence:\n${evidence}\n\nDeliver verdict.` }],
       temperature: 0.4,
       maxTokens: 300,
@@ -237,15 +226,24 @@ Respond ONLY with valid JSON.`,
     if (this.running) return;
     this.running = true;
 
+    // Reset trial to active and clear any stale concluded state
+    await prisma.trial.update({
+      where: { id: this.trialId },
+      data: { status: "active", concludedAt: null },
+    });
+
     const trial = await prisma.trial.findUniqueOrThrow({ where: { id: this.trialId } });
 
     for (const phase of PHASE_ORDER) {
+      // Capture previous phase BEFORE updating
+      const previousPhase = this.currentPhase;
       this.currentPhase = phase;
-      await prisma.trial.update({ where: { id: this.trialId }, data: { status: "active" } });
+
       await redis.set(TRIAL_PHASE_KEY(this.trialId), phase);
 
-      this.emit({ type: "PHASE_CHANGE", phase, previousPhase: this.currentPhase });
-      await this.sleep(600);
+      // Emit with correct previousPhase
+      this.emit({ type: "PHASE_CHANGE", phase, previousPhase });
+      await this.sleep(800);
 
       if (phase === "CONCLUDED") break;
       if (phase === "INITIALIZED") { await this.sleep(800); continue; }
@@ -255,7 +253,19 @@ Respond ONLY with valid JSON.`,
 
       const entryId = uuid();
       this.emit({ type: "SPEAKER_CHANGE", agentId: speakerRole, role: speakerRole });
-      await this.runAgentTurn(speakerRole, entryId, trial);
+      await this.sleep(400);
+
+      try {
+        await this.runAgentTurn(speakerRole, entryId, trial);
+      } catch (err) {
+        console.error(`[orchestrator] Error in phase ${phase}:`, err);
+        this.emit({
+          type: "PROCEDURAL_NOTICE",
+          message: `Error during ${phase}: ${String(err)}`,
+          severity: "error",
+        });
+        // Continue to next phase instead of crashing the whole trial
+      }
 
       if (phase === "VERDICT") {
         await this.issueVerdict(trial);
