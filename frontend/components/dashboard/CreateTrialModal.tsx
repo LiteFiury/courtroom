@@ -14,11 +14,12 @@ const ROLES: { role: AgentRole; label: string }[] = [
   { role: "witness",    label: "Witness" },
 ];
 
+// Updated to currently active models (May 2026)
 const DEFAULT_MODELS: Record<AIProvider, string> = {
-  groq:        "llama-3.1-70b-versatile",
-  cerebras:    "llama3.1-70b",
-  gemini:      "gemini-2.5-pro",
-  openrouter:  "mistralai/mistral-7b-instruct:free",
+  groq:        "llama-3.3-70b-versatile",
+  cerebras:    "llama-3.3-70b",
+  gemini:      "gemini-2.5-flash",
+  openrouter:  "mistralai/mistral-small-3.1-24b-instruct:free",
   anthropic:   "claude-3-5-haiku-20241022",
   ollama:      "llama3",
 };
@@ -33,9 +34,9 @@ export default function CreateTrialModal({ open, onClose }: { open: boolean; onC
   const [assignments, setAssignments] = useState<
     Record<AgentRole, { provider: AIProvider; model: string }>
   >({
-    judge:      { provider: "gemini",     model: DEFAULT_MODELS.gemini },
-    advocate_a: { provider: "groq",       model: DEFAULT_MODELS.groq },
-    advocate_b: { provider: "cerebras",   model: DEFAULT_MODELS.cerebras },
+    judge:      { provider: "groq",       model: DEFAULT_MODELS.groq },
+    advocate_a: { provider: "groq",       model: "llama3-70b-8192" },
+    advocate_b: { provider: "gemini",     model: DEFAULT_MODELS.gemini },
     witness:    { provider: "openrouter", model: DEFAULT_MODELS.openrouter },
   });
 
