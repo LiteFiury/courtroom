@@ -19,7 +19,7 @@ const DEFAULT_MODELS: Record<AIProvider, string> = {
   groq:        "llama-3.3-70b-versatile",
   cerebras:    "llama-3.3-70b",
   gemini:      "gemini-2.5-flash",
-  openrouter:  "deepseek/deepseek-r1:free",
+  openrouter:  "meta-llama/llama-3.3-70b-instruct:free",
   anthropic:   "claude-3-5-haiku-20241022",
   ollama:      "llama3",
 };
@@ -37,7 +37,7 @@ export default function CreateTrialModal({ open, onClose }: { open: boolean; onC
     judge:      { provider: "groq",       model: "llama-3.3-70b-versatile" },
     advocate_a: { provider: "groq",       model: "llama-3.1-8b-instant" },
     advocate_b: { provider: "gemini",     model: "gemini-2.5-flash" },
-    witness:    { provider: "openrouter", model: "deepseek/deepseek-r1:free" },
+    witness:    { provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct:free" },
   });
 
   const setAssignment = (role: AgentRole, provider: AIProvider) =>
