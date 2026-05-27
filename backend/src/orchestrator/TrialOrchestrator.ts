@@ -32,6 +32,9 @@ const PHASE_SPEAKER: Partial<Record<CourtPhase, AgentRole>> = {
   VERDICT:              "judge",
 };
 
+// Delay between tokens in ms — makes streaming readable like a human typing
+const TOKEN_DELAY_MS = 18;
+
 export class TrialOrchestrator {
   private io: IOServer;
   private trialId: string;
@@ -117,16 +120,18 @@ export class TrialOrchestrator {
       temperature: assignment.temperature ?? 0.75,
       maxTokens:   600,
       messages:    [{ role: "user", content: `Proceed with your ${this.currentPhase} statement.` }],
-      onToken: (token) => {
+      onToken: async (token) => {
         fullText += token;
         tokenCount++;
         this.emit({ type: "TOKEN", agentId: role, role, token, entryId });
+        // Small delay so tokens render visibly on the frontend
+        await this.sleep(TOKEN_DELAY_MS);
       },
     });
 
     this.emit({ type: "STREAM_END", agentId: role, role, entryId, tokenCount });
 
-    // persist
+    // Use a counter-based sequence (not Date.now()) to avoid INT4 overflow
     const sequence = await prisma.transcriptEntry.count({ where: { trialId: this.trialId } });
     await prisma.transcriptEntry.create({
       data: {
@@ -135,7 +140,6 @@ export class TrialOrchestrator {
       },
     });
 
-    // check if the OTHER side should object
     await this.maybeRaiseObjection(role, entryId, full);
 
     return full;
@@ -152,10 +156,13 @@ export class TrialOrchestrator {
     const objectionId = uuid();
 
     this.emit({ type: "OBJECTION_RAISED", objectionId, raisedBy: objectorRole, grounds, targetEntryId });
+
+    // Use a simple counter for objection sequence too
+    const objSeq = await prisma.objection.count({ where: { trialId: this.trialId } });
     await prisma.objection.create({
       data: {
         id: objectionId, trialId: this.trialId, raisedBy: objectorRole,
-        grounds, targetEntryId, sequence: Date.now(),
+        grounds, targetEntryId, sequence: objSeq,
       },
     });
 
@@ -167,7 +174,10 @@ export class TrialOrchestrator {
       messages:     [{ role: "user", content: "Rule now." }],
       temperature:  0.3,
       maxTokens:    80,
-      onToken: (t) => this.emit({ type: "TOKEN", agentId: "judge", role: "judge", token: t, entryId: objectionId + "_ruling" }),
+      onToken: async (t) => {
+        this.emit({ type: "TOKEN", agentId: "judge", role: "judge", token: t, entryId: objectionId + "_ruling" });
+        await this.sleep(TOKEN_DELAY_MS);
+      },
     });
 
     const ruling: "sustained" | "overruled" = rulingText.toLowerCase().includes("sustained")
@@ -226,7 +236,6 @@ export class TrialOrchestrator {
     if (this.running) return;
     this.running = true;
 
-    // Reset trial to active and clear any stale concluded state
     await prisma.trial.update({
       where: { id: this.trialId },
       data: { status: "active", concludedAt: null },
@@ -235,13 +244,10 @@ export class TrialOrchestrator {
     const trial = await prisma.trial.findUniqueOrThrow({ where: { id: this.trialId } });
 
     for (const phase of PHASE_ORDER) {
-      // Capture previous phase BEFORE updating
       const previousPhase = this.currentPhase;
       this.currentPhase = phase;
 
       await redis.set(TRIAL_PHASE_KEY(this.trialId), phase);
-
-      // Emit with correct previousPhase
       this.emit({ type: "PHASE_CHANGE", phase, previousPhase });
       await this.sleep(800);
 
@@ -264,7 +270,6 @@ export class TrialOrchestrator {
           message: `Error during ${phase}: ${String(err)}`,
           severity: "error",
         });
-        // Continue to next phase instead of crashing the whole trial
       }
 
       if (phase === "VERDICT") {
