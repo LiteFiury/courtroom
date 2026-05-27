@@ -7,22 +7,53 @@ import type { AIProvider, AgentRole } from "@/types/trial.types";
 import { cn } from "@/lib/utils";
 
 const PROVIDERS: AIProvider[] = ["groq", "cerebras", "gemini", "openrouter", "anthropic", "ollama"];
+
+// Active models per provider — May 2026
+const PROVIDER_MODELS: Record<AIProvider, string[]> = {
+  groq: [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "llama-4-scout-17b-16e-instruct",
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+  ],
+  cerebras: [
+    "llama-3.3-70b",
+    "llama-4-scout-17b-16e-instruct",
+    "gpt-oss-120b",
+  ],
+  gemini: [
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+  ],
+  openrouter: [
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "mistralai/mistral-small-3.2-24b-instruct:free",
+    "google/gemma-3-27b-it:free",
+    "deepseek/deepseek-v3-base:free",
+    "openai/gpt-4o-mini",
+  ],
+  anthropic: [
+    "claude-3-5-haiku-20241022",
+    "claude-3-5-sonnet-20241022",
+    "claude-3-opus-20240229",
+  ],
+  ollama: [
+    "llama3",
+    "llama3.1",
+    "mistral",
+    "gemma2",
+  ],
+};
+
 const ROLES: { role: AgentRole; label: string }[] = [
   { role: "judge",      label: "Judge" },
   { role: "advocate_a", label: "Prosecution" },
   { role: "advocate_b", label: "Defence" },
   { role: "witness",    label: "Witness" },
 ];
-
-// Active models as of May 2026
-const DEFAULT_MODELS: Record<AIProvider, string> = {
-  groq:        "llama-3.3-70b-versatile",
-  cerebras:    "llama-3.3-70b",
-  gemini:      "gemini-2.5-flash",
-  openrouter:  "meta-llama/llama-3.3-70b-instruct:free",
-  anthropic:   "claude-3-5-haiku-20241022",
-  ollama:      "llama3",
-};
 
 export default function CreateTrialModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
@@ -34,14 +65,16 @@ export default function CreateTrialModal({ open, onClose }: { open: boolean; onC
   const [assignments, setAssignments] = useState<
     Record<AgentRole, { provider: AIProvider; model: string }>
   >({
-    judge:      { provider: "groq",       model: "llama-3.3-70b-versatile" },
-    advocate_a: { provider: "groq",       model: "llama-3.1-8b-instant" },
+    judge:      { provider: "cerebras",   model: "llama-3.3-70b" },
+    advocate_a: { provider: "groq",       model: "llama-3.3-70b-versatile" },
     advocate_b: { provider: "gemini",     model: "gemini-2.5-flash" },
-    witness:    { provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct:free" },
+    witness:    { provider: "groq",       model: "llama-3.1-8b-instant" },
   });
 
-  const setAssignment = (role: AgentRole, provider: AIProvider) =>
-    setAssignments((a) => ({ ...a, [role]: { provider, model: DEFAULT_MODELS[provider] } }));
+  const setProvider = (role: AgentRole, provider: AIProvider) => {
+    const defaultModel = PROVIDER_MODELS[provider][0];
+    setAssignments((a) => ({ ...a, [role]: { provider, model: defaultModel } }));
+  };
 
   const setModel = (role: AgentRole, model: string) =>
     setAssignments((a) => ({ ...a, [role]: { ...a[role], model } }));
@@ -148,18 +181,24 @@ export default function CreateTrialModal({ open, onClose }: { open: boolean; onC
                   {ROLES.map(({ role, label }) => (
                     <div key={role} className="flex items-center gap-2">
                       <span className="w-24 shrink-0 font-serif text-xs text-court-parchmentDim">{label}</span>
+                      {/* Provider dropdown */}
                       <select
                         value={assignments[role].provider}
-                        onChange={(e) => setAssignment(role, e.target.value as AIProvider)}
+                        onChange={(e) => setProvider(role, e.target.value as AIProvider)}
                         className="rounded border border-court-border bg-court-panel px-2 py-1 font-serif text-xs text-court-parchment outline-none focus:border-court-gold/40"
                       >
                         {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
                       </select>
-                      <input
+                      {/* Model dropdown — updates when provider changes */}
+                      <select
                         value={assignments[role].model}
                         onChange={(e) => setModel(role, e.target.value)}
                         className="flex-1 rounded border border-court-border bg-court-panel px-2 py-1 font-mono text-xs text-court-parchmentDim outline-none focus:border-court-gold/40"
-                      />
+                      >
+                        {PROVIDER_MODELS[assignments[role].provider].map((m) => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
                     </div>
                   ))}
                 </div>
