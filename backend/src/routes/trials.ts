@@ -1,126 +1,122 @@
-"use client";
-import { useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useCourtroomStore } from "@/store/courtroomStore";
-import { useUIStore } from "@/store/uiStore";
-import SpeechBubble from "@/components/ui/SpeechBubble";
-import { roleLabel, cn } from "@/lib/utils";
-import type { AgentRole } from "@/types/trial.types";
+import { Router } from "express";
+import { z } from "zod";
+import { prisma } from "../lib/db";
 
-interface Props {
-  role: AgentRole;
-  label?: string;
-  providerInfo?: string; // e.g. "groq / llama-3.3-70b-versatile"
-}
+export const trialsRouter = Router();
 
-const roleAccent: Record<AgentRole, string> = {
-  judge:      "border-court-judgeAcc/40",
-  advocate_a: "border-court-prosecutionAcc/40",
-  advocate_b: "border-court-defenseAcc/40",
-  witness:    "border-court-witnessAcc/40",
-};
+const CreateSchema = z.object({
+  title:           z.string().min(1),
+  caseDescription: z.string().optional(),
+  config: z.object({
+    rules: z.enum(["federal", "simplified"]).default("simplified"),
+    agentAssignments: z.array(z.object({
+      role:        z.enum(["judge", "advocate_a", "advocate_b", "witness"]),
+      provider:    z.enum(["groq", "anthropic", "openrouter", "ollama", "gemini", "cerebras"]),
+      model:       z.string(),
+      temperature: z.number().optional(),
+    })),
+  }),
+});
 
-const roleGlow: Record<AgentRole, string> = {
-  judge:      "shadow-[0_0_24px_-4px_rgba(42,107,50,0.35)]",
-  advocate_a: "shadow-[0_0_24px_-4px_rgba(42,78,138,0.35)]",
-  advocate_b: "shadow-[0_0_24px_-4px_rgba(138,42,42,0.35)]",
-  witness:    "shadow-[0_0_24px_-4px_rgba(74,86,128,0.25)]",
-};
+// GET /trials
+trialsRouter.get("/", async (_req, res) => {
+  try {
+    const trials = await prisma.trial.findMany({
+      orderBy: { createdAt: "desc" },
+      select: { id: true, title: true, caseDescription: true, status: true, config: true, createdAt: true, concludedAt: true },
+    });
+    res.json(trials);
+  } catch (e) {
+    res.status(500).json({ message: "DB error" });
+  }
+});
 
-const roleIcon: Record<AgentRole, string> = {
-  judge:      "fa-solid fa-gavel",
-  advocate_a: "fa-solid fa-scale-unbalanced",
-  advocate_b: "fa-solid fa-shield-halved",
-  witness:    "fa-solid fa-person",
-};
+// POST /trials
+trialsRouter.post("/", async (req, res) => {
+  const parsed = CreateSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: "Invalid body", errors: parsed.error.issues });
+  try {
+    const trial = await prisma.trial.create({
+      data: { title: parsed.data.title, caseDescription: parsed.data.caseDescription, config: parsed.data.config as object, status: "idle" },
+    });
+    return res.status(201).json(trial);
+  } catch (e) {
+    return res.status(500).json({ message: "DB error" });
+  }
+});
 
-export default function AgentPanel({ role, label, providerInfo }: Props) {
-  const entries = useCourtroomStore((s) =>
-    Object.values(s.streamingEntries).filter((e) => e.role === role),
-  );
-  const activeSpeaker = useCourtroomStore((s) => s.activeSpeaker);
-  const spotlight = useUIStore((s) => s.spotlightRole);
+// GET /trials/:id
+trialsRouter.get("/:id", async (req, res) => {
+  try {
+    const trial = await prisma.trial.findUnique({ where: { id: req.params.id } });
+    if (!trial) return res.status(404).json({ message: "Not found" });
+    return res.json(trial);
+  } catch {
+    return res.status(500).json({ message: "DB error" });
+  }
+});
 
-  const isActive = activeSpeaker?.role === role || spotlight === role;
-  const latestEntry = entries[entries.length - 1];
+// DELETE /trials/:id
+trialsRouter.delete("/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const trial = await prisma.trial.findUnique({ where: { id } });
+    if (!trial) return res.status(404).json({ message: "Not found" });
 
-  // Auto-scroll to bottom whenever content changes
-  const scrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [latestEntry?.content]);
+    // Delete in order of foreign key dependencies
+    await prisma.verdict.deleteMany({ where: { trialId: id } });
+    await prisma.objection.deleteMany({ where: { trialId: id } });
+    await prisma.evidence.deleteMany({ where: { trialId: id } });
+    await prisma.transcriptEntry.deleteMany({ where: { trialId: id } });
+    await prisma.trial.delete({ where: { id } });
 
-  return (
-    <motion.div
-      layout
-      className={cn(
-        "flex h-full flex-col rounded border bg-court-panel transition-all duration-300",
-        isActive
-          ? [roleAccent[role], roleGlow[role], "border-opacity-100"]
-          : "border-court-border",
-      )}
-    >
-      {/* Header */}
-      <div className="flex items-center gap-2 border-b border-court-border px-4 py-2">
-        <i className={cn(roleIcon[role], "text-court-parchmentMuted text-xs")} />
-        <span className="font-serif text-xs uppercase tracking-widest text-court-parchmentMuted">
-          {label ?? roleLabel(role)}
-        </span>
+    return res.status(204).send();
+  } catch (e) {
+    console.error("[delete trial]", e);
+    return res.status(500).json({ message: "DB error" });
+  }
+});
 
-        {/* ── Info button ── */}
-        {providerInfo && (
-          <div className="relative ml-1 group">
-            <button className="flex h-4 w-4 items-center justify-center rounded-full border border-court-border text-[9px] text-court-parchmentMuted/60 hover:border-court-gold/40 hover:text-court-gold transition-colors">
-              i
-            </button>
-            {/* Tooltip */}
-            <div className="pointer-events-none absolute left-1/2 top-6 z-50 -translate-x-1/2 whitespace-nowrap rounded border border-court-border bg-court-surface px-2 py-1 font-mono text-[10px] text-court-parchmentMuted opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-              {providerInfo}
-            </div>
-          </div>
-        )}
+// POST /trials/:id/start
+trialsRouter.post("/:id/start", async (req, res) => {
+  try {
+    const trial = await prisma.trial.findUnique({ where: { id: req.params.id } });
+    if (!trial) return res.status(404).json({ message: "Not found" });
+    return res.json(trial);
+  } catch {
+    return res.status(500).json({ message: "DB error" });
+  }
+});
 
-        {isActive && latestEntry?.isStreaming && (
-          <span className="ml-auto h-1.5 w-1.5 animate-phase-pulse rounded-full bg-court-gold" />
-        )}
-      </div>
+// GET /trials/:id/transcript
+trialsRouter.get("/:id/transcript", async (req, res) => {
+  try {
+    const entries = await prisma.transcriptEntry.findMany({ where: { trialId: req.params.id }, orderBy: { sequence: "asc" } });
+    res.json(entries);
+  } catch {
+    res.status(500).json({ message: "DB error" });
+  }
+});
 
-      {/* Speech area — auto-scrolls */}
-      <div
-        ref={scrollRef}
-        className="flex flex-1 flex-col gap-2 overflow-y-auto p-3 scrollbar-thin"
-      >
-        <AnimatePresence initial={false}>
-          {entries.length === 0 && (
-            <motion.p
-              key="empty"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="font-serif text-xs italic text-court-parchmentMuted/40 mt-auto text-center pb-4"
-            >
-              Awaiting counsel…
-            </motion.p>
-          )}
-          {entries.map((entry) => (
-            <motion.div
-              key={entry.entryId}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <SpeechBubble
-                role={role}
-                content={entry.content}
-                isStreaming={entry.isStreaming}
-                isPaused={entry.isPaused}
-                stricken={entry.stricken}
-              />
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
-    </motion.div>
-  );
-}
+// GET /trials/:id/evidence
+trialsRouter.get("/:id/evidence", async (req, res) => {
+  try {
+    const evidence = await prisma.evidence.findMany({ where: { trialId: req.params.id } });
+    res.json(evidence);
+  } catch {
+    res.status(500).json({ message: "DB error" });
+  }
+});
+
+// POST /trials/:id/evidence
+trialsRouter.post("/:id/evidence", async (req, res) => {
+  const schema = z.object({ submittedBy: z.string(), title: z.string(), content: z.string(), fileUrl: z.string().optional() });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: "Invalid body" });
+  try {
+    const evidence = await prisma.evidence.create({ data: { ...parsed.data, trialId: req.params.id, status: "pending" } });
+    return res.status(201).json(evidence);
+  } catch {
+    return res.status(500).json({ message: "DB error" });
+  }
+});
