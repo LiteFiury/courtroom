@@ -10,8 +10,21 @@ import ObjectionBanner from "@/components/ui/ObjectionBanner";
 import VerdictModal from "@/components/ui/VerdictModal";
 import ProceduralNotices from "@/components/ui/ProceduralNotices";
 import { cn } from "@/lib/utils";
+import type { TrialConfig } from "@/types/trial.types";
 
-export default function CourtroomLayout({ trialTitle }: { trialTitle: string }) {
+interface Props {
+  trialTitle: string;
+  config?: TrialConfig;
+}
+
+function getProviderInfo(config: TrialConfig | undefined, role: string): string | undefined {
+  if (!config) return undefined;
+  const a = config.agentAssignments?.find((x) => x.role === role);
+  if (!a) return undefined;
+  return `${a.provider} / ${a.model}`;
+}
+
+export default function CourtroomLayout({ trialTitle, config }: Props) {
   useElapsed();
   const phase = useCourtroomStore((s) => s.phase);
   const elapsed = useCourtroomStore((s) => s.elapsedSeconds);
@@ -32,18 +45,8 @@ export default function CourtroomLayout({ trialTitle }: { trialTitle: string }) 
           <span className="font-mono text-xs text-court-parchmentMuted tabular-nums">
             {formatElapsed(elapsed)}
           </span>
-          <span
-            className={cn(
-              "flex items-center gap-1.5 text-xs",
-              isConnected ? "text-court-judgeAcc" : "text-red-500/70",
-            )}
-          >
-            <span
-              className={cn(
-                "h-1.5 w-1.5 rounded-full",
-                isConnected ? "bg-court-judgeAcc animate-phase-pulse" : "bg-red-500/70",
-              )}
-            />
+          <span className={cn("flex items-center gap-1.5 text-xs", isConnected ? "text-court-judgeAcc" : "text-red-500/70")}>
+            <span className={cn("h-1.5 w-1.5 rounded-full", isConnected ? "bg-court-judgeAcc animate-phase-pulse" : "bg-red-500/70")} />
             {isConnected ? "Live" : "Disconnected"}
           </span>
         </div>
@@ -58,25 +61,25 @@ export default function CourtroomLayout({ trialTitle }: { trialTitle: string }) 
 
         {/* Centre: agent panels */}
         <main className="flex flex-1 flex-col gap-0 overflow-hidden">
-          {/* Judge bench — top */}
+          {/* Judge bench */}
           <div className="h-[30%] border-b border-court-border p-3 shrink-0">
-            <AgentPanel role="judge" label="Presiding Judge" />
+            <AgentPanel role="judge" label="Presiding Judge" providerInfo={getProviderInfo(config, "judge")} />
           </div>
 
           {/* Advocates row */}
           <div className="flex flex-1 overflow-hidden">
             <div className="flex-1 border-r border-court-border p-3">
-              <AgentPanel role="advocate_a" label="Prosecution" />
+              <AgentPanel role="advocate_a" label="Prosecution" providerInfo={getProviderInfo(config, "advocate_a")} />
             </div>
             <div className="flex-1 p-3">
-              <AgentPanel role="advocate_b" label="Defence" />
+              <AgentPanel role="advocate_b" label="Defence" providerInfo={getProviderInfo(config, "advocate_b")} />
             </div>
           </div>
 
-          {/* Witness — collapsible bottom strip */}
+          {/* Witness strip */}
           {(phase === "DIRECT_EXAMINATION" || phase === "CROSS_EXAMINATION" || phase === "REDIRECT") && (
             <div className="h-[22%] shrink-0 border-t border-court-border p-3">
-              <AgentPanel role="witness" label="Witness Stand" />
+              <AgentPanel role="witness" label="Witness Stand" providerInfo={getProviderInfo(config, "witness")} />
             </div>
           )}
         </main>
