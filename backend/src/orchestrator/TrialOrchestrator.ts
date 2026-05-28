@@ -33,7 +33,7 @@ const PHASE_SPEAKER: Partial<Record<CourtPhase, AgentRole>> = {
 };
 
 // ~40ms per token = comfortable reading speed (~25 tokens/sec)
-const TOKEN_DELAY_MS = 40;
+const TOKEN_DELAY_MS = 500;
 
 export class TrialOrchestrator {
   private io: IOServer;
