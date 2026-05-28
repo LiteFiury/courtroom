@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCourtroomStore } from "@/store/courtroomStore";
 import { useUIStore } from "@/store/uiStore";
@@ -9,6 +10,7 @@ import type { AgentRole } from "@/types/trial.types";
 interface Props {
   role: AgentRole;
   label?: string;
+  providerInfo?: string; // e.g. "groq / llama-3.3-70b-versatile"
 }
 
 const roleAccent: Record<AgentRole, string> = {
@@ -32,7 +34,7 @@ const roleIcon: Record<AgentRole, string> = {
   witness:    "fa-solid fa-person",
 };
 
-export default function AgentPanel({ role, label }: Props) {
+export default function AgentPanel({ role, label, providerInfo }: Props) {
   const entries = useCourtroomStore((s) =>
     Object.values(s.streamingEntries).filter((e) => e.role === role),
   );
@@ -41,6 +43,14 @@ export default function AgentPanel({ role, label }: Props) {
 
   const isActive = activeSpeaker?.role === role || spotlight === role;
   const latestEntry = entries[entries.length - 1];
+
+  // Auto-scroll to bottom whenever content changes
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [latestEntry?.content]);
 
   return (
     <motion.div
@@ -58,13 +68,30 @@ export default function AgentPanel({ role, label }: Props) {
         <span className="font-serif text-xs uppercase tracking-widest text-court-parchmentMuted">
           {label ?? roleLabel(role)}
         </span>
+
+        {/* ── Info button ── */}
+        {providerInfo && (
+          <div className="relative ml-1 group">
+            <button className="flex h-4 w-4 items-center justify-center rounded-full border border-court-border text-[9px] text-court-parchmentMuted/60 hover:border-court-gold/40 hover:text-court-gold transition-colors">
+              i
+            </button>
+            {/* Tooltip */}
+            <div className="pointer-events-none absolute left-1/2 top-6 z-50 -translate-x-1/2 whitespace-nowrap rounded border border-court-border bg-court-surface px-2 py-1 font-mono text-[10px] text-court-parchmentMuted opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+              {providerInfo}
+            </div>
+          </div>
+        )}
+
         {isActive && latestEntry?.isStreaming && (
           <span className="ml-auto h-1.5 w-1.5 animate-phase-pulse rounded-full bg-court-gold" />
         )}
       </div>
 
-      {/* Speech area */}
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-3 scrollbar-thin">
+      {/* Speech area — auto-scrolls */}
+      <div
+        ref={scrollRef}
+        className="flex flex-1 flex-col gap-2 overflow-y-auto p-3 scrollbar-thin"
+      >
         <AnimatePresence initial={false}>
           {entries.length === 0 && (
             <motion.p
