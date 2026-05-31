@@ -28,19 +28,22 @@ const cursorColors: Record<AgentRole, string> = {
 const MS_PER_CHAR = 55; // ~3 words/sec
 
 export default function SpeechBubble({ role, content, isStreaming, isPaused, stricken }: Props) {
-  const [displayed, setDisplayed] = useState("");
-  const indexRef = useRef(0);
-
-  // Direct assignment — always reflects latest content on every render cycle
-  // No useEffect needed; this runs synchronously before the interval fires
   const contentRef = useRef(content);
   contentRef.current = content;
 
+  // Was this entry actively streaming when it first mounted?
+  const wasStreamingOnMount = useRef(isStreaming);
+
+  // If NOT streaming on mount = old/completed entry → show full text immediately, no animation
+  const [displayed, setDisplayed] = useState(() =>
+    isStreaming ? "" : content
+  );
+  const indexRef = useRef(isStreaming ? 0 : content.length);
+
   useEffect(() => {
-    // Single interval, mounted once, never restarted
-    // Advances one character every MS_PER_CHAR ms
-    // If caught up to content length, it simply idles and waits
-    // NO flush on isStreaming=false — that was the bug
+    // Only run typewriter for entries that were streaming when they mounted
+    if (!wasStreamingOnMount.current) return;
+
     const id = setInterval(() => {
       if (indexRef.current < contentRef.current.length) {
         indexRef.current += 1;
@@ -49,7 +52,7 @@ export default function SpeechBubble({ role, content, isStreaming, isPaused, str
     }, MS_PER_CHAR);
 
     return () => clearInterval(id);
-  }, []); // empty deps — start once on mount, clean up on unmount
+  }, []); // run once on mount only
 
   return (
     <div
@@ -62,8 +65,8 @@ export default function SpeechBubble({ role, content, isStreaming, isPaused, str
     >
       <span>{displayed}</span>
 
-      {/* Show cursor only while still typing — based on displayed vs full content */}
-      {isStreaming && !isPaused && displayed.length < contentRef.current.length && (
+      {/* Cursor only shows while this entry is actively being typed */}
+      {isStreaming && !isPaused && wasStreamingOnMount.current && (
         <span className={cn(
           "ml-[2px] inline-block h-[1em] w-[2px] translate-y-[1px] animate-cursor-blink",
           cursorColors[role],
