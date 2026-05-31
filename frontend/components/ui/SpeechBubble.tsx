@@ -25,48 +25,38 @@ const cursorColors: Record<AgentRole, string> = {
   witness:    "bg-court-witnessAcc",
 };
 
-// 3 words/sec ≈ 18 chars/sec → 1000/18 ≈ 55ms per char
-const MS_PER_CHAR = 55;
+const MS_PER_CHAR = 55; // ~3 words/sec
 
 export default function SpeechBubble({ role, content, isStreaming, isPaused, stricken }: Props) {
   const [displayed, setDisplayed] = useState("");
-  // Keep a ref to the full content so the interval always sees latest value
-  const fullContentRef = useRef("");
-  const indexRef = useRef(0); // how many chars we've shown so far
+  const indexRef = useRef(0);
+  const contentRef = useRef(content);
 
-  // Sync latest content into ref whenever it changes
+  // Always keep contentRef in sync with latest content
+  contentRef.current = content;
+
   useEffect(() => {
-    fullContentRef.current = content;
-  }, [content]);
-
-  // Single interval that ticks every MS_PER_CHAR and reveals one char
-  useEffect(() => {
-    indexRef.current = 0;
-    setDisplayed("");
-    fullContentRef.current = content;
-
+    // Start interval — runs forever until component unmounts
     const id = setInterval(() => {
-      const full = fullContentRef.current;
-      if (indexRef.current >= full.length) {
-        // Nothing new yet — keep waiting
-        return;
+      const full = contentRef.current;
+      if (indexRef.current < full.length) {
+        indexRef.current += 1;
+        setDisplayed(full.slice(0, indexRef.current));
       }
-      indexRef.current += 1;
-      setDisplayed(full.slice(0, indexRef.current));
+      // If caught up, just idle — more content may arrive later
     }, MS_PER_CHAR);
 
     return () => clearInterval(id);
-  // Only create a new interval when a new entry starts (entryId changes)
-  // We use content's initial value as a proxy — but really we want per-entry.
-  // The parent should remount this component per entry so this is fine.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // run once on mount, never restart
 
-  // When streaming ends, show everything immediately (no text left behind)
+  // When streaming ends flush any remaining chars instantly
   useEffect(() => {
     if (!isStreaming) {
-      setDisplayed(fullContentRef.current);
-      indexRef.current = fullContentRef.current.length;
+      const full = contentRef.current;
+      if (indexRef.current < full.length) {
+        indexRef.current = full.length;
+        setDisplayed(full);
+      }
     }
   }, [isStreaming]);
 
@@ -82,12 +72,10 @@ export default function SpeechBubble({ role, content, isStreaming, isPaused, str
       <span>{displayed}</span>
 
       {isStreaming && !isPaused && (
-        <span
-          className={cn(
-            "ml-[2px] inline-block h-[1em] w-[2px] translate-y-[1px] animate-cursor-blink",
-            cursorColors[role],
-          )}
-        />
+        <span className={cn(
+          "ml-[2px] inline-block h-[1em] w-[2px] translate-y-[1px] animate-cursor-blink",
+          cursorColors[role],
+        )} />
       )}
       {isPaused && isStreaming && (
         <span className="ml-1 animate-cursor-blink text-court-gold text-xs">▌</span>
