@@ -3,6 +3,10 @@ import type { CourtroomState, ActiveSpeaker, StreamingEntry } from "@/types/cour
 import type { CourtPhase, Evidence, Objection, Verdict } from "@/types/trial.types";
 
 interface CourtroomStore extends CourtroomState {
+  // Animation queue — only one entry animates at a time
+  animationQueue: string[];       // ordered entryIds waiting to animate
+  animatingEntryId: string | null; // the one currently typing
+
   setTrialId: (id: string) => void;
   setPhase: (phase: CourtPhase) => void;
   setActiveSpeaker: (speaker: ActiveSpeaker | null) => void;
@@ -17,10 +21,11 @@ interface CourtroomStore extends CourtroomState {
   setVerdict: (verdict: Verdict) => void;
   setConnected: (connected: boolean) => void;
   incrementElapsed: () => void;
+  dequeueAnimation: () => void;   // called by SpeechBubble when done typing
   reset: () => void;
 }
 
-const initial: CourtroomState = {
+const initial: CourtroomState & { animationQueue: string[]; animatingEntryId: string | null } = {
   trialId: null,
   phase: "IDLE",
   activeSpeaker: null,
@@ -30,6 +35,8 @@ const initial: CourtroomState = {
   verdictData: null,
   isConnected: false,
   elapsedSeconds: 0,
+  animationQueue: [],
+  animatingEntryId: null,
 };
 
 export const useCourtroomStore = create<CourtroomStore>((set) => ({
@@ -40,7 +47,25 @@ export const useCourtroomStore = create<CourtroomStore>((set) => ({
   setActiveSpeaker: (activeSpeaker) => set({ activeSpeaker }),
 
   initStreamingEntry: (entry) =>
-    set((s) => ({ streamingEntries: { ...s.streamingEntries, [entry.entryId]: entry } })),
+    set((s) => {
+      const newEntries = { ...s.streamingEntries, [entry.entryId]: entry };
+      const newQueue = [...s.animationQueue, entry.entryId];
+      // If nothing is animating yet, start this one immediately
+      const newAnimating = s.animatingEntryId ?? entry.entryId;
+      return {
+        streamingEntries: newEntries,
+        animationQueue: newQueue,
+        animatingEntryId: newAnimating,
+      };
+    }),
+
+  // Called by SpeechBubble when it finishes typing all chars
+  dequeueAnimation: () =>
+    set((s) => {
+      const newQueue = s.animationQueue.slice(1); // remove current head
+      const next = newQueue[0] ?? null;           // promote next in line
+      return { animationQueue: newQueue, animatingEntryId: next };
+    }),
 
   appendToken: (entryId, token) =>
     set((s) => {
