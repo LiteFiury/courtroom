@@ -30,35 +30,26 @@ const MS_PER_CHAR = 55; // ~3 words/sec
 export default function SpeechBubble({ role, content, isStreaming, isPaused, stricken }: Props) {
   const [displayed, setDisplayed] = useState("");
   const indexRef = useRef(0);
-  const contentRef = useRef(content);
 
-  // Always keep contentRef in sync with latest content
+  // Direct assignment — always reflects latest content on every render cycle
+  // No useEffect needed; this runs synchronously before the interval fires
+  const contentRef = useRef(content);
   contentRef.current = content;
 
   useEffect(() => {
-    // Start interval — runs forever until component unmounts
+    // Single interval, mounted once, never restarted
+    // Advances one character every MS_PER_CHAR ms
+    // If caught up to content length, it simply idles and waits
+    // NO flush on isStreaming=false — that was the bug
     const id = setInterval(() => {
-      const full = contentRef.current;
-      if (indexRef.current < full.length) {
+      if (indexRef.current < contentRef.current.length) {
         indexRef.current += 1;
-        setDisplayed(full.slice(0, indexRef.current));
+        setDisplayed(contentRef.current.slice(0, indexRef.current));
       }
-      // If caught up, just idle — more content may arrive later
     }, MS_PER_CHAR);
 
     return () => clearInterval(id);
-  }, []); // run once on mount, never restart
-
-  // When streaming ends flush any remaining chars instantly
-  useEffect(() => {
-    if (!isStreaming) {
-      const full = contentRef.current;
-      if (indexRef.current < full.length) {
-        indexRef.current = full.length;
-        setDisplayed(full);
-      }
-    }
-  }, [isStreaming]);
+  }, []); // empty deps — start once on mount, clean up on unmount
 
   return (
     <div
@@ -71,15 +62,18 @@ export default function SpeechBubble({ role, content, isStreaming, isPaused, str
     >
       <span>{displayed}</span>
 
-      {isStreaming && !isPaused && (
+      {/* Show cursor only while still typing — based on displayed vs full content */}
+      {isStreaming && !isPaused && displayed.length < contentRef.current.length && (
         <span className={cn(
           "ml-[2px] inline-block h-[1em] w-[2px] translate-y-[1px] animate-cursor-blink",
           cursorColors[role],
         )} />
       )}
+
       {isPaused && isStreaming && (
         <span className="ml-1 animate-cursor-blink text-court-gold text-xs">▌</span>
       )}
+
       {stricken && (
         <span className="absolute right-2 top-1 text-[10px] uppercase tracking-widest text-red-400 opacity-70">
           stricken
