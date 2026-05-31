@@ -9,6 +9,8 @@ interface Props {
   isStreaming: boolean;
   isPaused: boolean;
   stricken: boolean;
+  isAnimating: boolean;   // true only when this entry is at the front of the queue
+  onComplete: () => void; // called when done typing → dequeues and starts next
 }
 
 const roleStyles: Record<AgentRole, string> = {
@@ -27,32 +29,43 @@ const cursorColors: Record<AgentRole, string> = {
 
 const MS_PER_CHAR = 55; // ~3 words/sec
 
-export default function SpeechBubble({ role, content, isStreaming, isPaused, stricken }: Props) {
-  const contentRef = useRef(content);
-  contentRef.current = content;
+export default function SpeechBubble({
+  role, content, isStreaming, isPaused, stricken, isAnimating, onComplete,
+}: Props) {
+  // Entries that are NOT animating show nothing until their turn
+  // Entries that ARE animating type char by char
+  const [displayed, setDisplayed] = useState("");
+  const indexRef    = useRef(0);
+  const contentRef  = useRef(content);
+  const completedRef = useRef(false);
+  const onCompleteRef = useRef(onComplete);
 
-  // Was this entry actively streaming when it first mounted?
-  const wasStreamingOnMount = useRef(isStreaming);
-
-  // If NOT streaming on mount = old/completed entry → show full text immediately, no animation
-  const [displayed, setDisplayed] = useState(() =>
-    isStreaming ? "" : content
-  );
-  const indexRef = useRef(isStreaming ? 0 : content.length);
+  // Always keep refs fresh
+  contentRef.current   = content;
+  onCompleteRef.current = onComplete;
 
   useEffect(() => {
-    // Only run typewriter for entries that were streaming when they mounted
-    if (!wasStreamingOnMount.current) return;
+    // Do not start until this entry is at the front of the queue
+    if (!isAnimating) return;
 
     const id = setInterval(() => {
-      if (indexRef.current < contentRef.current.length) {
+      const full = contentRef.current;
+
+      if (indexRef.current < full.length) {
+        // Still have chars to type
         indexRef.current += 1;
-        setDisplayed(contentRef.current.slice(0, indexRef.current));
+        setDisplayed(full.slice(0, indexRef.current));
+      } else if (!isStreaming && !completedRef.current) {
+        // Caught up to end AND backend has finished sending — hand off to next
+        completedRef.current = true;
+        clearInterval(id);
+        onCompleteRef.current();
       }
+      // If caught up but still streaming, just idle — more chars will arrive
     }, MS_PER_CHAR);
 
     return () => clearInterval(id);
-  }, []); // run once on mount only
+  }, [isAnimating, isStreaming]); // restart interval when isAnimating flips true
 
   return (
     <div
@@ -61,12 +74,13 @@ export default function SpeechBubble({ role, content, isStreaming, isPaused, str
         roleStyles[role],
         stricken && "opacity-30 line-through",
         isPaused && "opacity-60",
+        // Not yet animating — hide completely so it doesn't flash empty space
+        !isAnimating && displayed.length === 0 && "hidden",
       )}
     >
       <span>{displayed}</span>
 
-      {/* Cursor only shows while this entry is actively being typed */}
-      {isStreaming && !isPaused && wasStreamingOnMount.current && (
+      {isAnimating && isStreaming && !isPaused && (
         <span className={cn(
           "ml-[2px] inline-block h-[1em] w-[2px] translate-y-[1px] animate-cursor-blink",
           cursorColors[role],
