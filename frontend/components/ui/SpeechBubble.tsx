@@ -5,7 +5,7 @@ import type { AgentRole } from "@/types/trial.types";
 
 interface Props {
   role: AgentRole;
-  content: string;       // full text received so far from store
+  content: string;
   isStreaming: boolean;
   isPaused: boolean;
   stricken: boolean;
@@ -25,55 +25,48 @@ const cursorColors: Record<AgentRole, string> = {
   witness:    "bg-court-witnessAcc",
 };
 
-// 3 words/sec → average word is ~5 chars + 1 space = 6 chars
-// interval per char = 1000ms / (3 words * 6 chars) ≈ 55ms per char
+// 3 words/sec ≈ 18 chars/sec → 1000/18 ≈ 55ms per char
 const MS_PER_CHAR = 55;
 
 export default function SpeechBubble({ role, content, isStreaming, isPaused, stricken }: Props) {
-  // displayed is what's actually shown — lags behind content intentionally
   const [displayed, setDisplayed] = useState("");
-  const queueRef = useRef("");      // unrendered chars waiting to be shown
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Keep a ref to the full content so the interval always sees latest value
+  const fullContentRef = useRef("");
+  const indexRef = useRef(0); // how many chars we've shown so far
 
-  // When new content arrives from store, add the diff to the queue
+  // Sync latest content into ref whenever it changes
   useEffect(() => {
-    const newChars = content.slice(queueRef.current.length + displayed.length);
-    if (newChars) {
-      queueRef.current += newChars;
-    }
-  }, [content, displayed.length]);
+    fullContentRef.current = content;
+  }, [content]);
 
-  // Drain the queue one char at a time at MS_PER_CHAR rate
+  // Single interval that ticks every MS_PER_CHAR and reveals one char
   useEffect(() => {
-    function tick() {
-      if (queueRef.current.length === 0) {
-        timerRef.current = null;
+    indexRef.current = 0;
+    setDisplayed("");
+    fullContentRef.current = content;
+
+    const id = setInterval(() => {
+      const full = fullContentRef.current;
+      if (indexRef.current >= full.length) {
+        // Nothing new yet — keep waiting
         return;
       }
-      // Release one character at a time for smooth typewriter feel
-      const char = queueRef.current[0];
-      queueRef.current = queueRef.current.slice(1);
-      setDisplayed((d) => d + char);
-      timerRef.current = setTimeout(tick, MS_PER_CHAR);
-    }
+      indexRef.current += 1;
+      setDisplayed(full.slice(0, indexRef.current));
+    }, MS_PER_CHAR);
 
-    if (!timerRef.current && queueRef.current.length > 0) {
-      timerRef.current = setTimeout(tick, MS_PER_CHAR);
-    }
+    return () => clearInterval(id);
+  // Only create a new interval when a new entry starts (entryId changes)
+  // We use content's initial value as a proxy — but really we want per-entry.
+  // The parent should remount this component per entry so this is fine.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [displayed]); // re-check queue every time displayed updates
-
-  // When streaming ends, flush remaining queue instantly so nothing is lost
+  // When streaming ends, show everything immediately (no text left behind)
   useEffect(() => {
-    if (!isStreaming && queueRef.current.length > 0) {
-      setDisplayed((d) => d + queueRef.current);
-      queueRef.current = "";
+    if (!isStreaming) {
+      setDisplayed(fullContentRef.current);
+      indexRef.current = fullContentRef.current.length;
     }
   }, [isStreaming]);
 
@@ -88,7 +81,6 @@ export default function SpeechBubble({ role, content, isStreaming, isPaused, str
     >
       <span>{displayed}</span>
 
-      {/* Blinking cursor while typing */}
       {isStreaming && !isPaused && (
         <span
           className={cn(
@@ -97,11 +89,9 @@ export default function SpeechBubble({ role, content, isStreaming, isPaused, str
           )}
         />
       )}
-
       {isPaused && isStreaming && (
         <span className="ml-1 animate-cursor-blink text-court-gold text-xs">▌</span>
       )}
-
       {stricken && (
         <span className="absolute right-2 top-1 text-[10px] uppercase tracking-widest text-red-400 opacity-70">
           stricken
